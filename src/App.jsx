@@ -26,6 +26,35 @@ const store = {
 const profileKey = email => `ae_profile:${email.replace(/[@.]/g,"_")}`;
 const pwKey      = email => `ae_pwd:${email.replace(/[@.]/g,"_")}`;
 
+
+// ─── AI CACHE (localStorage) ──────────────────────────────────────────────────
+// Cache keys include sport+level so each combination is stored independently.
+// Workouts are also keyed by day. Cache expires after 7 days.
+const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+function cacheSet(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch {}
+}
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) { localStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+const nutritionCacheKey = (sport, level) =>
+  `ae_nutrition:${sport}_${level}`.replace(/\s+/g, "_");
+const workoutCacheKey = (sport, level, day) =>
+  `ae_workout:${sport}_${level}_${day}`.replace(/\s+/g, "_");
+const recoveryCacheKey = (sport) =>
+  `ae_recovery:${sport}`.replace(/\s+/g, "_");
+
 // ─── AI CONTENT VIA ANTHROPIC API ────────────────────────────────────────────
 async function fetchAI(prompt, maxTokens=900) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -42,6 +71,9 @@ async function fetchAI(prompt, maxTokens=900) {
 }
 
 async function getAINutrition(sport, level) {
+  const key = nutritionCacheKey(sport, level);
+  const cached = cacheGet(key);
+  if (cached) return cached;
   const text = await fetchAI(
     `You are a sports nutritionist. For a ${level} ${sport} athlete, respond ONLY with a JSON object (no markdown) with this exact shape:
 {
@@ -57,7 +89,11 @@ async function getAINutrition(sport, level) {
 }
 Macros must sum to 100. Be specific and practical.`
   );
-  try { return JSON.parse(text.replace(/```json|```/g,"").trim()); } catch { return null; }
+  try {
+    const data = JSON.parse(text.replace(/```json|```/g,"").trim());
+    if (data) cacheSet(key, data);
+    return data;
+  } catch { return null; }
 }
 
 async function getAIWorkout(sport, level, day) {
@@ -79,6 +115,9 @@ async function getAIWorkout(sport, level, day) {
 }
 
 async function getAIRecovery(sport) {
+  const key = recoveryCacheKey(sport);
+  const cached = cacheGet(key);
+  if (cached) return cached;
   const text = await fetchAI(
     `You are a sports recovery specialist. For a ${sport} athlete, respond ONLY with a JSON object (no markdown):
 {
@@ -88,7 +127,11 @@ async function getAIRecovery(sport) {
   "mental_tips": ["<tip>","<tip>","<tip>"]
 }`
   );
-  try { return JSON.parse(text.replace(/```json|```/g,"").trim()); } catch { return null; }
+  try {
+    const data = JSON.parse(text.replace(/```json|```/g,"").trim());
+    if (data) cacheSet(key, data);
+    return data;
+  } catch { return null; }
 }
 
 // ─── UI PRIMITIVES ────────────────────────────────────────────────────────────
