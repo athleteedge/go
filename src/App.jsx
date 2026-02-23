@@ -11,20 +11,20 @@ const COLORS = {
   Cycling:"#f43f5e",Tennis:"#84cc16",Volleyball:"#fb923c",Wrestling:"#a855f7",Rowing:"#14b8a6"
 };
 
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
+// ─── STORAGE (localStorage — works on Vercel and all browsers) ───────────────
 const store = {
-  async get(key, shared=false) {
-    try { const r = await window.storage.get(key, shared); return r?.value ?? null; } catch { return null; }
+  get(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
   },
-  async set(key, val, shared=false) {
-    try { await window.storage.set(key, val, shared); } catch {}
+  set(key, val) {
+    try { localStorage.setItem(key, val); } catch {}
   },
-  async del(key) {
-    try { await window.storage.delete(key); } catch {}
+  del(key) {
+    try { localStorage.removeItem(key); } catch {}
   }
 };
-const profileKey = email => `profile:${email.replace(/[@.]/g,"_")}`;
-const pwKey      = email => `pwd:${email.replace(/[@.]/g,"_")}`;
+const profileKey = email => `ae_profile:${email.replace(/[@.]/g,"_")}`;
+const pwKey      = email => `ae_pwd:${email.replace(/[@.]/g,"_")}`;
 
 // ─── AI CONTENT VIA ANTHROPIC API ────────────────────────────────────────────
 async function fetchAI(prompt, maxTokens=900) {
@@ -150,13 +150,13 @@ function AuthScreen({onAuth}) {
     await new Promise(r=>setTimeout(r,300));
     const key = pwKey(email);
     if(mode==="signup"){
-      const existing = await store.get(key, true);
+      const existing = store.get(key);
       if(existing){setError("Account already exists. Please log in.");setLoading(false);return;}
-      await store.set(key, password, true);
-      setMsg("✅ Account created! You can now log in.");
-      setMode("login");
+      store.set(key, password);
+      // Auto-login immediately after signup — no need to re-enter credentials
+      onAuth({email, id:"user_"+email.replace(/[@.]/g,"_")});
     } else {
-      const stored = await store.get(key, true);
+      const stored = store.get(key);
       if(stored===null){setError("No account found. Please sign up first.");setLoading(false);return;}
       if(stored!==password){setError("Incorrect password.");setLoading(false);return;}
       onAuth({email, id:"user_"+email.replace(/[@.]/g,"_")});
@@ -1025,9 +1025,9 @@ export default function App() {
   useEffect(()=>{
     (async()=>{
       // Restore session
-      const savedEmail = await store.get("session:currentUser", true);
+      const savedEmail = store.get("session:currentUser");
       if(savedEmail){
-        const savedProfile = await store.get(profileKey(savedEmail), true);
+        const savedProfile = store.get(profileKey(savedEmail));
         if(savedProfile){
           try{
             const p = JSON.parse(savedProfile);
@@ -1044,7 +1044,7 @@ export default function App() {
       }
 
       // Load shared community posts
-      const savedPosts = await store.get("community:posts", true);
+      const savedPosts = store.get("community:posts");
       if(savedPosts){
         try { const p=JSON.parse(savedPosts); if(p.length>0){setPosts(p);} } catch {}
       }
@@ -1055,13 +1055,13 @@ export default function App() {
   // ── Auto-save posts ──
   useEffect(()=>{
     if(!postsReady) return;
-    store.set("community:posts", JSON.stringify(posts), true);
+    store.set("community:posts", JSON.stringify(posts));
   },[posts, postsReady]);
 
   const handleAuth = async u => {
     setAuthUser(u);
-    await store.set("session:currentUser", u.email, true);
-    const existing = await store.get(profileKey(u.email), true);
+    store.set("session:currentUser", u.email);
+    const existing = store.get(profileKey(u.email));
     if(existing){
       try { setProfile(JSON.parse(existing)); setAppState("app"); return; } catch {}
     }
@@ -1071,18 +1071,18 @@ export default function App() {
   const handleOnboardingComplete = async form => {
     const p = {...form, id:authUser.id, email:authUser.email};
     setProfile(p);
-    await store.set(profileKey(authUser.email), JSON.stringify(p), true);
+    store.set(profileKey(authUser.email), JSON.stringify(p));
     setAppState("welcome");
   };
 
   const handleUpdateProfile = async updated => {
     const p = {...updated, id:authUser.id};
     setProfile(p);
-    await store.set(profileKey(authUser.email), JSON.stringify(p), true);
+    store.set(profileKey(authUser.email), JSON.stringify(p));
   };
 
   const handleLogout = async () => {
-    await store.del("session:currentUser");
+    store.del("session:currentUser");
     setAppState("auth"); setAuthUser(null); setProfile(null); setPage("Home");
   };
 
