@@ -150,13 +150,13 @@ function AuthScreen({onAuth}) {
     await new Promise(r=>setTimeout(r,300));
     const key = pwKey(email);
     if(mode==="signup"){
-      const existing = await store.get(key);
+      const existing = await store.get(key, true);
       if(existing){setError("Account already exists. Please log in.");setLoading(false);return;}
-      await store.set(key, password);
+      await store.set(key, password, true);
       setMsg("✅ Account created! You can now log in.");
       setMode("login");
     } else {
-      const stored = await store.get(key);
+      const stored = await store.get(key, true);
       if(stored===null){setError("No account found. Please sign up first.");setLoading(false);return;}
       if(stored!==password){setError("Incorrect password.");setLoading(false);return;}
       onAuth({email, id:"user_"+email.replace(/[@.]/g,"_")});
@@ -1025,9 +1025,9 @@ export default function App() {
   useEffect(()=>{
     (async()=>{
       // Restore session
-      const savedEmail = await store.get("session:currentUser");
+      const savedEmail = await store.get("session:currentUser", true);
       if(savedEmail){
-        const savedProfile = await store.get(profileKey(savedEmail));
+        const savedProfile = await store.get(profileKey(savedEmail), true);
         if(savedProfile){
           try{
             const p = JSON.parse(savedProfile);
@@ -1060,8 +1060,8 @@ export default function App() {
 
   const handleAuth = async u => {
     setAuthUser(u);
-    await store.set("session:currentUser", u.email);
-    const existing = await store.get(profileKey(u.email));
+    await store.set("session:currentUser", u.email, true);
+    const existing = await store.get(profileKey(u.email), true);
     if(existing){
       try { setProfile(JSON.parse(existing)); setAppState("app"); return; } catch {}
     }
@@ -1071,14 +1071,14 @@ export default function App() {
   const handleOnboardingComplete = async form => {
     const p = {...form, id:authUser.id, email:authUser.email};
     setProfile(p);
-    await store.set(profileKey(authUser.email), JSON.stringify(p));
+    await store.set(profileKey(authUser.email), JSON.stringify(p), true);
     setAppState("welcome");
   };
 
   const handleUpdateProfile = async updated => {
     const p = {...updated, id:authUser.id};
     setProfile(p);
-    await store.set(profileKey(authUser.email), JSON.stringify(p));
+    await store.set(profileKey(authUser.email), JSON.stringify(p), true);
   };
 
   const handleLogout = async () => {
